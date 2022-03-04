@@ -12,7 +12,7 @@ class RateLimiter[T](val rate: Int, val interval: Int) {
     private var size: Int = 0
 
     @tailrec
-    private def clean(time: Long): Unit =
+    final def clean(time: Long): Unit =
       head match {
         case Some(node) if (node.time < time) =>
           head = node.next
@@ -22,8 +22,7 @@ class RateLimiter[T](val rate: Int, val interval: Int) {
         case _ => ()
       }
 
-    def add: Boolean = {
-      val time: Long = System.currentTimeMillis()
+    final def add(time: Long): Boolean = {
       clean(time - interval)
       if (size >= rate) false
       else {
@@ -36,23 +35,26 @@ class RateLimiter[T](val rate: Int, val interval: Int) {
       }
     }
 
-    def isEmpty: Boolean = size == 0
-    def nonEmpty: Boolean = size > 0
+    final def isEmpty: Boolean = size == 0
+    final def nonEmpty: Boolean = size > 0
   }
 
   private val map: MMap[T, MyList] = MMap.empty
 
-  def accept(key: T): Boolean =
-    if (map.contains(key))
-      map(key).add
-    else {
+  private def time: Long = System.currentTimeMillis()
+
+  def accept(key: T): Boolean = {
+    if (!map.contains(key))
       map += key -> new MyList()
-      map(key).add
-    }
+    map(key).add(time)
+  }
 
   def clean(): Unit = map
     .keys
     .toList
-    .filter(key => map(key).isEmpty)
+    .filter(key => {
+      map(key).clean(time - interval)
+      map(key).isEmpty
+    })
     .foreach(map.remove)
 }
